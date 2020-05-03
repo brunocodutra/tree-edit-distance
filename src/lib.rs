@@ -7,3 +7,7 @@
 //! that transforms one tree into the other.
 //!
 //! [levenshtein]:  https://en.wikipedia.org/wiki/Levenshtein_distance
+
+mod node;
+
+pub use node::Node;
