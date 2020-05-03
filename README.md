@@ -16,6 +16,12 @@ tree-edit-distance = "0.1"
 
 The full API documentation is available on [docs.rs][docs.home]
 
+## Contribution
+
+TreeEditDistance is an open source project and you're very welcome to contribute to this project by
+opening [issues] and/or [pull requests][pulls], see [CONTRIBUTING][CONTRIBUTING] for general
+guidelines.
+
 ## License
 
 TreeEditDistance is distributed under the terms of the MIT license, see [LICENSE] for details.
