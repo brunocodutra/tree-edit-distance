@@ -11,3 +11,4 @@ keywords = ["diff", "tree", "distance", "levenshtein", "lcs"]
 categories = ["algorithms"]
 
 [dependencies]
+arrayvec = "0.5.1"
