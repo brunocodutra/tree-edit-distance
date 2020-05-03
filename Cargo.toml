@@ -6,6 +6,7 @@ edition = "2018"
 description = "Find the lowest cost sequence of edits between two trees"
 repository = "https://github.com/brunocodutra/tree-edit-distance.git"
 license = "MIT"
+readme = "README.md"
 keywords = ["diff", "tree", "distance", "levenshtein", "lcs"]
 categories = ["algorithms"]
 
