@@ -1,4 +1,5 @@
 /target
+/proptest-regressions
 Cargo.lock
 cobertura.xml
 .vscode
