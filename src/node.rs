@@ -26,9 +26,7 @@ use std::{borrow::Borrow, ops::Add};
 ///
 ///     type Weight = u64;
 ///     fn weight(&self) -> Self::Weight {
-///         // Let's say the cost of inserting/deleting a json object is proportional
-///         // to the total number of nodes it has.
-///         1 + self.children().iter().map(|n| n.weight()).sum::<u64>()
+///         1
 ///     }
 ///
 ///     type Child = &'n Self;
@@ -57,6 +55,8 @@ pub trait Node<'n> {
     type Weight: Default + Copy + Ord + Add<Output = Self::Weight>;
 
     /// Returns the cost of inserting or deleting this [Node].
+    ///
+    /// A [Node]'s weight should be independent of the weight of its children.
     fn weight(&'n self) -> Self::Weight;
 
     /// A type that may be borrowed as `&Self`.
