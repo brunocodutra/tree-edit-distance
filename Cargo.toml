@@ -18,4 +18,5 @@ pathfinding = "2.0.4"
 
 [dev-dependencies]
 derivative = "2.1.1"
+json = "0.12.4"
 proptest = "0.9.6"
