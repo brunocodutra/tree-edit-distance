@@ -1,45 +1,6 @@
 use std::{borrow::Borrow, ops::Add};
 
 /// An abstraction for a generic tree.
-///
-/// # Example
-///
-/// ```rust
-/// use tree_edit_distance::Node;
-/// use std::collections::BTreeMap;
-/// use std::mem::{discriminant, Discriminant};
-///
-/// enum Json {
-///     Null,
-///     Bool(bool),
-///     Number(u64),
-///     String(String),
-///     Array(Box<[Json]>),
-///     Map(BTreeMap<String, Json>),
-/// }
-///
-/// impl<'n> Node<'n> for Json {
-///     type Kind = Discriminant<Json>;
-///     fn kind(&self) -> Self::Kind {
-///         discriminant(self)
-///     }
-///
-///     type Weight = u64;
-///     fn weight(&self) -> Self::Weight {
-///         1
-///     }
-///
-///     type Child = &'n Self;
-///     type Children = Box<[Self::Child]>;
-///     fn children(&'n self) -> Self::Children {
-///         match self {
-///             Json::Array(a) => a.iter().collect(),
-///             Json::Map(m) => m.values().collect(),
-///             _ => Box::default(),
-///         }
-///     }
-/// }
-/// ```
 pub trait Node<'n> {
     /// A type whose values encode the [Node]'s _kind_.
     ///
