@@ -12,11 +12,11 @@ categories = ["algorithms"]
 
 [dependencies]
 arrayvec = "0.5.1"
-derive_more = "0.99.5"
+derive_more = "0.99.10"
 itertools = "0.9.0"
 pathfinding = "2.0.4"
 
 [dev-dependencies]
 derivative = "2.1.1"
 json = "0.12.4"
-proptest = "0.9.6"
+proptest = "0.10.1"
