@@ -73,7 +73,7 @@ where
             let a = a.get(x).map(Borrow::borrow);
             let b = b.get(y).map(Borrow::borrow);
 
-            let mut successors = ArrayVec::<[_; 3]>::new();
+            let mut successors = ArrayVec::<_, 3>::new();
 
             if let Some(a) = a {
                 let next = (x + 1, y);
