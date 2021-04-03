@@ -11,7 +11,7 @@ keywords = ["diff", "tree", "distance", "levenshtein", "lcs"]
 categories = ["algorithms"]
 
 [dependencies]
-arrayvec = "0.5.2"
+arrayvec = "0.7.0"
 derive_more = "0.99.11"
 itertools = "0.10.0"
 pathfinding = "2.0.4"
