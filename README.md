@@ -1,4 +1,4 @@
-# TreeEditDistance [![crate.badge]][crate.home] [![docs.badge]][docs.home] [![codecov.badge]][codecov.home]
+# TreeEditDistance [![docs.badge]][docs.home] [![codecov.badge]][codecov.home]
 
 This crate provides an algorithm to compute the lowest cost sequence of edits between two trees.
 It is based on a recursive generalized version of the [Levenshtein distance][levenshtein] for 
@@ -25,9 +25,6 @@ guidelines.
 ## License
 
 TreeEditDistance is distributed under the terms of the MIT license, see [LICENSE] for details.
-
-[crate.home]:       https://crates.io/crates/tree-edit-distance
-[crate.badge]:      https://meritbadge.herokuapp.com/tree-edit-distance
 
 [docs.home]:        https://docs.rs/tree-edit-distance
 [docs.badge]:       https://docs.rs/tree-edit-distance/badge.svg
