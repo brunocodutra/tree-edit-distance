@@ -31,8 +31,6 @@ impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
     }
 }
 
-impl<T> Cost<T> {}
-
 trait NodeExt {
     type Cost: Zero + Ord + Copy;
     fn cost(&self) -> Self::Cost;
@@ -147,7 +145,7 @@ mod tests {
         breadth: usize,
     }
 
-    #[derive(Debug, Default, Clone, Eq, PartialEq)]
+    #[derive(Debug, Default, Clone)]
     struct MockNode<K> {
         kind: K,
         weight: u64,
@@ -182,7 +180,7 @@ mod tests {
         }
     }
 
-    impl<'n, K: 'n + Eq> Node<'n> for MockNode<K> {
+    impl<'n, K: 'n + PartialEq> Node<'n> for MockNode<K> {
         type Kind = &'n K;
         fn kind(&'n self) -> Self::Kind {
             &self.kind
@@ -202,8 +200,6 @@ mod tests {
 
     #[derive(Debug, Default, Clone)]
     struct Neq;
-
-    impl Eq for Neq {}
 
     impl PartialEq for Neq {
         fn eq(&self, _: &Self) -> bool {
