@@ -1,6 +1,6 @@
 use crate::Node;
 use arrayvec::ArrayVec;
-use derive_more::Add;
+use derive_more::{Add, From};
 use itertools::Itertools;
 use pathfinding::{num_traits::Zero, prelude::*};
 use std::{borrow::Borrow, collections::HashMap, ops::Add};
@@ -18,7 +18,7 @@ pub enum Edit {
     Remove,
 }
 
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Add)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
 struct Cost<T>(T);
 
 impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
@@ -31,9 +31,8 @@ impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
     }
 }
 
-trait NodeExt {
-    type Cost: Zero + Ord + Copy;
-    fn cost(&self) -> Self::Cost;
+trait NodeExt: for<'n> Node<'n> {
+    fn cost(&self) -> <Self as Node>::Weight;
 }
 
 impl<N, W> NodeExt for N
@@ -41,20 +40,20 @@ where
     for<'n> N: Node<'n, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
-    type Cost = Cost<W>;
-    fn cost(&self) -> Self::Cost {
+    fn cost(&self) -> W {
         self.children()
             .borrow()
             .iter()
             .map(Borrow::borrow)
             .map(NodeExt::cost)
-            .fold(Cost(self.weight()), Add::add)
+            .fold(self.weight(), Add::add)
     }
 }
 
-fn levenshtein<N, R, S>(a: S, b: S) -> (Box<[Edit]>, N::Cost)
+fn levenshtein<N, W, R, S>(a: S, b: S) -> (Box<[Edit]>, W)
 where
-    for<'n> N: Node<'n> + NodeExt,
+    for<'n> N: Node<'n, Weight = W> + NodeExt,
+    W: Default + Copy + Ord + Add<Output = W>,
     R: Borrow<N>,
     S: Borrow<[R]>,
 {
@@ -63,7 +62,7 @@ where
 
     let mut edges = HashMap::new();
 
-    let (path, cost) = dijkstra(
+    let (path, Cost(cost)) = dijkstra(
         &(0, 0),
         |&(x, y)| {
             use Edit::*;
@@ -77,14 +76,14 @@ where
                 let next = (x + 1, y);
                 let none = edges.insert(((x, y), next), Remove);
                 debug_assert!(none.is_none());
-                successors.push((next, a.cost()));
+                successors.push((next, a.cost().into()));
             }
 
             if let Some(b) = b {
                 let next = (x, y + 1);
                 let none = edges.insert(((x, y), next), Insert);
                 debug_assert!(none.is_none());
-                successors.push((next, b.cost()));
+                successors.push((next, b.cost().into()));
             }
 
             if let (Some(a), Some(b)) = (a, b) {
@@ -94,7 +93,7 @@ where
                     let next = (x + 1, y + 1);
                     let none = edges.insert(((x, y), next), Replace(inner));
                     debug_assert!(none.is_none());
-                    successors.push((next, cost));
+                    successors.push((next, cost.into()));
                 }
             }
 
@@ -122,30 +121,45 @@ where
     for<'n> N: Node<'n, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
-    let (e, Cost(c)) = levenshtein::<N, _, &[_]>(&[a], &[b]);
-    (e, c)
+    levenshtein::<N, _, _, &[_]>(&[a], &[b])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use derivative::Derivative;
-    use proptest::{collection::vec, prelude::*};
-    use std::{collections::HashSet, fmt::Debug};
+    use proptest::{collection::vec, prelude::*, strategy::LazyJust};
+    use std::{collections::HashSet, fmt::Debug, mem::swap};
+    use test_strategy::{proptest, Arbitrary};
     use Edit::*;
 
-    #[cfg(test)]
-    #[derive(Derivative)]
-    #[derivative(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, From)]
     pub struct Size {
-        #[derivative(Default(value = "3"))]
         depth: usize,
-
-        #[derivative(Default(value = "5"))]
         breadth: usize,
     }
 
-    #[derive(Debug, Default, Clone)]
+    impl Default for Size {
+        fn default() -> Self {
+            (3, 5).into()
+        }
+    }
+
+    fn node<K: 'static + Arbitrary>(
+        children: impl Strategy<Value = Vec<MockNode<K>>>,
+    ) -> impl Strategy<Value = MockNode<K>> {
+        (any::<K>(), 1..100u64, children).prop_map_into()
+    }
+
+    fn nodes<K: 'static + Arbitrary>(size: Size) -> impl Strategy<Value = MockNode<K>> {
+        let d = size.depth as u32;
+        let b = size.breadth as u32;
+        let s = b.pow(d);
+
+        node(LazyJust::new(Vec::new))
+            .prop_recursive(d, s, b, move |inner| node(vec(inner, 0..=b as usize)))
+    }
+
+    #[derive(Debug, Default, Clone, From)]
     struct MockNode<K> {
         kind: K,
         weight: u64,
@@ -157,26 +171,7 @@ mod tests {
         type Strategy = BoxedStrategy<Self>;
 
         fn arbitrary_with(size: Size) -> Self::Strategy {
-            let d = size.depth;
-            let b = size.breadth;
-            let size = b.pow(d as u32);
-
-            (any::<K>(), (1u16..).prop_map_into())
-                .prop_map(|(kind, weight)| MockNode {
-                    kind,
-                    weight,
-                    children: vec![],
-                })
-                .prop_recursive(d as u32, size as u32, b as u32, move |inner| {
-                    (any::<K>(), (1u16..).prop_map_into(), vec(inner, 0..=b)).prop_map(
-                        |(kind, weight, children)| MockNode {
-                            kind,
-                            weight,
-                            children,
-                        },
-                    )
-                })
-                .boxed()
+            nodes(size).boxed()
         }
     }
 
@@ -198,21 +193,15 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Default, Clone)]
-    struct Neq;
+    #[derive(Debug, Default, Clone, Eq, PartialEq, Arbitrary)]
+    struct Eq;
 
-    impl PartialEq for Neq {
+    #[derive(Debug, Default, Clone, Arbitrary)]
+    struct NotEq;
+
+    impl PartialEq for NotEq {
         fn eq(&self, _: &Self) -> bool {
             false
-        }
-    }
-
-    impl Arbitrary for Neq {
-        type Parameters = ();
-        type Strategy = Just<Self>;
-
-        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-            Just(Neq)
         }
     }
 
@@ -245,66 +234,74 @@ mod tests {
         }
     }
 
-    proptest! {
-        #[test]
-        fn the_number_of_edits_is_at_most_equal_to_the_total_number_of_nodes(a: MockNode<char>, b: MockNode<char>) {
-            let (e, _) = diff(&a, &b);
-            assert!(e.nodes() <= a.nodes() + b.nodes());
+    #[proptest]
+    fn the_number_of_edits_is_at_most_equal_to_the_total_number_of_nodes(
+        a: MockNode<u8>,
+        b: MockNode<u8>,
+    ) {
+        let (e, _) = diff(&a, &b);
+        assert!(e.nodes() <= a.nodes() + b.nodes());
+    }
+
+    #[proptest]
+    fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockNode<u8>, b: MockNode<u8>) {
+        let (_, c) = diff(&a, &b);
+        assert!(c <= a.cost() + b.cost());
+    }
+
+    #[proptest]
+    fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
+        let (e, _) = diff(&a, &b);
+
+        assert_eq!(
+            e.into_vec().into_iter().collect::<HashSet<_>>(),
+            [Remove, Insert].iter().cloned().collect::<HashSet<_>>()
+        );
+    }
+
+    #[proptest]
+    fn nodes_of_equal_kinds_can_be_replaced(a: MockNode<Eq>, b: MockNode<Eq>) {
+        let (e, _) = diff(&a, &b);
+        let (i, _) = levenshtein(a.children(), b.children());
+        assert_eq!(&*e, &[Replace(i)]);
+    }
+
+    #[proptest]
+    fn the_cost_of_swapping_nodes_is_equal_to_the_sum_of_their_costs(
+        a: MockNode<NotEq>,
+        b: MockNode<NotEq>,
+    ) {
+        let (_, c) = diff(&a, &b);
+        assert_eq!(c, a.cost() + b.cost());
+    }
+
+    #[proptest]
+    fn the_cost_of_replacing_nodes_does_not_depend_on_their_weights(
+        a: MockNode<Eq>,
+        b: MockNode<Eq>,
+    ) {
+        let (_, c) = diff(&a, &b);
+        assert!(c <= a.cost() - a.weight() + b.cost() - b.weight());
+    }
+
+    #[proptest]
+    fn the_cost_is_always_minimized(
+        #[any((1, 100).into())] mut a: MockNode<Eq>,
+        #[any((1, 100).into())] mut b: MockNode<Eq>,
+    ) {
+        if a.children().len() > b.children().len() {
+            swap(&mut a, &mut b)
         }
 
-        #[test]
-        fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<Neq>, b: MockNode<Neq>) {
-            let (e, _) = diff(&a, &b);
+        let h: u64 = b
+            .children()
+            .iter()
+            .sorted_by_key(|n| n.weight())
+            .skip(b.children().len() - a.children().len())
+            .map(Node::weight)
+            .sum();
 
-            assert_eq!(
-                e.into_vec().into_iter().collect::<HashSet<_>>(),
-                [Remove, Insert].iter().cloned().collect::<HashSet<_>>()
-            );
-        }
-
-        #[test]
-        fn nodes_of_equal_kinds_can_be_replaced(a: MockNode<()>, b: MockNode<()>) {
-            let (e, _) = diff(&a, &b);
-            let (i, _) = levenshtein(a.children(), b.children());
-            assert_eq!(&*e, &[Replace(i)]);
-        }
-
-        #[test]
-        fn the_cost_of_swapping_nodes_is_equal_to_the_sum_of_their_costs(a: MockNode<Neq>, b: MockNode<Neq>) {
-            let (_, c) = diff(&a, &b);
-            assert_eq!(c, a.cost().0 + b.cost().0);
-        }
-
-        #[test]
-        fn the_cost_of_replacing_nodes_does_not_depend_on_their_weights(a: MockNode<()>, b: MockNode<()>) {
-            let (_, c) = diff(&a, &b);
-            assert!(c <= a.cost().0 - a.weight() + b.cost().0 - b.weight());
-        }
-
-        #[test]
-        fn the_cost_is_minimized(x: Vec<MockNode<()>>) {
-            let y = vec![MockNode {
-                kind: (),
-                weight: 1,
-                children: vec![],
-            }];
-
-            let a = MockNode {
-                kind: (),
-                weight: 1,
-                children: y.clone(),
-            };
-
-            let b = MockNode {
-                kind: (),
-                weight: 1,
-                children: vec![x, y].concat(),
-            };
-
-            let heaviest = b.children().iter().max_by_key(|n| n.weight()).unwrap();
-
-            let (_, c) = diff(&a, &b);
-            assert_eq!(c, b.cost().0 - b.weight() - heaviest.weight());
-        }
+        let (_, c) = diff(&a, &b);
+        assert_eq!(c, b.cost() - b.weight() - h);
     }
 }
