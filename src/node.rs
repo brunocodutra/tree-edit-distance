@@ -1,4 +1,5 @@
-use std::{borrow::Borrow, ops::Add};
+use std::borrow::Borrow;
+use std::ops::{Add, Deref};
 
 /// An abstraction for a generic tree.
 pub trait Node<'n> {
@@ -26,7 +27,7 @@ pub trait Node<'n> {
     type Child: Borrow<Self>;
 
     /// A type that holds this [Node]'s children as a contiguous sequence (i.e. a _slice_).
-    type Children: Borrow<[Self::Child]>;
+    type Children: Deref<Target = [Self::Child]>;
 
     /// Returns this [Node]'s children.
     fn children(&'n self) -> Self::Children;

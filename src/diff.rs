@@ -3,7 +3,8 @@ use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
 use pathfinding::{num_traits::Zero, prelude::*};
-use std::{borrow::Borrow, collections::HashMap, ops::Add};
+use std::ops::{Add, Deref};
+use std::{borrow::Borrow, collections::HashMap};
 
 /// A single operation between two [Node]s.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -42,7 +43,6 @@ where
 {
     fn cost(&self) -> W {
         self.children()
-            .borrow()
             .iter()
             .map(Borrow::borrow)
             .map(NodeExt::cost)
@@ -55,11 +55,8 @@ where
     for<'n> N: Node<'n, Weight = W> + NodeExt,
     W: Default + Copy + Ord + Add<Output = W>,
     R: Borrow<N>,
-    S: Borrow<[R]>,
+    S: Deref<Target = [R]>,
 {
-    let a = a.borrow();
-    let b = b.borrow();
-
     let mut edges = HashMap::new();
 
     let (path, Cost(cost)) = dijkstra(
@@ -215,7 +212,6 @@ mod tests {
     {
         fn nodes(&self) -> usize {
             self.children()
-                .borrow()
                 .iter()
                 .map(Borrow::borrow)
                 .map(Tree::nodes)
