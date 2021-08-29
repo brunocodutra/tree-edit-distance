@@ -4,8 +4,8 @@ use std::{borrow::Borrow, ops::Add};
 pub trait Node<'n> {
     /// A type whose values encode the [Node]'s _kind_.
     ///
-    /// Only [Node]s of the same _kind_ can be replaced by one another.
-    type Kind: Eq;
+    /// Only [Node]s of the equal _kind_ can replace each other.
+    type Kind: PartialEq;
 
     /// Returns a value that encodes this [Node]'s _kind_.
     fn kind(&'n self) -> Self::Kind;
