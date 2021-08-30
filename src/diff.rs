@@ -124,8 +124,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert2::check;
     use proptest::{collection::vec, prelude::*, strategy::LazyJust};
-    use std::{collections::HashSet, fmt::Debug, mem::swap};
+    use std::{fmt::Debug, mem::swap};
     use test_strategy::{proptest, Arbitrary};
     use Edit::*;
 
@@ -236,30 +237,32 @@ mod tests {
         b: MockNode<u8>,
     ) {
         let (e, _) = diff(&a, &b);
-        assert!(e.nodes() <= a.nodes() + b.nodes());
+        check!(e.nodes() <= a.nodes() + b.nodes());
     }
 
     #[proptest]
     fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockNode<u8>, b: MockNode<u8>) {
         let (_, c) = diff(&a, &b);
-        assert!(c <= a.cost() + b.cost());
+        check!(c <= a.cost() + b.cost());
+    }
+
+    #[proptest]
+    fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
+        let (_, c) = diff(&a, &a);
+        check!(c == 0);
     }
 
     #[proptest]
     fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
         let (e, _) = diff(&a, &b);
-
-        assert_eq!(
-            e.into_vec().into_iter().collect::<HashSet<_>>(),
-            [Remove, Insert].iter().cloned().collect::<HashSet<_>>()
-        );
+        check!(let [Remove, Insert] | [Insert, Remove] = &*e);
     }
 
     #[proptest]
     fn nodes_of_equal_kinds_can_be_replaced(a: MockNode<Eq>, b: MockNode<Eq>) {
         let (e, _) = diff(&a, &b);
         let (i, _) = levenshtein(a.children(), b.children());
-        assert_eq!(&*e, &[Replace(i)]);
+        check!(&*e == &[Replace(i)]);
     }
 
     #[proptest]
@@ -268,7 +271,7 @@ mod tests {
         b: MockNode<NotEq>,
     ) {
         let (_, c) = diff(&a, &b);
-        assert_eq!(c, a.cost() + b.cost());
+        check!(c == a.cost() + b.cost());
     }
 
     #[proptest]
@@ -277,7 +280,8 @@ mod tests {
         b: MockNode<Eq>,
     ) {
         let (_, c) = diff(&a, &b);
-        assert!(c <= a.cost() - a.weight() + b.cost() - b.weight());
+        let (_, d) = levenshtein(a.children(), b.children());
+        check!(c == d);
     }
 
     #[proptest]
@@ -298,6 +302,6 @@ mod tests {
             .sum();
 
         let (_, c) = diff(&a, &b);
-        assert_eq!(c, b.cost() - b.weight() - h);
+        check!(c == b.cost() - b.weight() - h);
     }
 }
