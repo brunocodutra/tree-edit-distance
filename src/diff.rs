@@ -125,8 +125,9 @@ where
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use proptest::{collection::vec, prelude::*, strategy::LazyJust};
-    use std::{fmt::Debug, mem::swap};
+    use proptest::collection::{size_range, vec};
+    use proptest::{prelude::*, strategy::LazyJust};
+    use std::fmt::Debug;
     use test_strategy::{proptest, Arbitrary};
     use Edit::*;
 
@@ -247,6 +248,12 @@ mod tests {
     }
 
     #[proptest]
+    fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
+        let (_, c) = diff(&a, &a);
+        assert_eq!(c, 0);
+    }
+
+    #[proptest]
     fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
         let (e, _) = diff(&a, &b);
         assert_matches!(&e[..], [Remove, Insert] | [Insert, Remove]);
@@ -283,22 +290,20 @@ mod tests {
 
     #[proptest]
     fn the_cost_is_always_minimized(
-        #[any((1, 100).into())] mut a: MockNode<Eq>,
-        #[any((1, 100).into())] mut b: MockNode<Eq>,
+        #[any(size_range(1..16).lift())] a: Vec<MockNode<u8>>,
+        #[any(size_range(1..16).lift())] b: Vec<MockNode<u8>>,
+        #[strategy(0..#a.len())] i: usize,
+        #[strategy(0..#b.len())] j: usize,
     ) {
-        if a.children().len() > b.children().len() {
-            swap(&mut a, &mut b)
-        }
+        let mut x = a.clone();
+        let mut y = b.clone();
 
-        let h: u64 = b
-            .children()
-            .iter()
-            .sorted_by_key(|n| n.weight())
-            .skip(b.children().len() - a.children().len())
-            .map(Node::weight)
-            .sum();
+        let m = x.remove(i);
+        let n = y.remove(j);
 
-        let (_, c) = diff(&a, &b);
-        assert_eq!(c, b.cost() - b.weight() - h);
+        let (_, c) = levenshtein(a, b);
+        let (_, d) = levenshtein(x, y);
+
+        assert_matches!((c, d + m.cost() + n.cost()), (x, y) if x <= y);
     }
 }
