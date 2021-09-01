@@ -124,8 +124,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use proptest::{collection::vec, prelude::*, strategy::LazyJust};
-    use std::{collections::HashSet, fmt::Debug, mem::swap};
+    use std::{fmt::Debug, mem::swap};
     use test_strategy::{proptest, Arbitrary};
     use Edit::*;
 
@@ -236,30 +237,29 @@ mod tests {
         b: MockNode<u8>,
     ) {
         let (e, _) = diff(&a, &b);
-        assert!(e.nodes() <= a.nodes() + b.nodes());
+        assert_matches!((e.nodes(), a.nodes() + b.nodes()), (x, y) if x <= y);
     }
 
     #[proptest]
     fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockNode<u8>, b: MockNode<u8>) {
         let (_, c) = diff(&a, &b);
-        assert!(c <= a.cost() + b.cost());
+        assert_matches!((c, a.cost() + b.cost()), (x, y) if x <= y);
     }
 
     #[proptest]
     fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
         let (e, _) = diff(&a, &b);
-
-        assert_eq!(
-            e.into_vec().into_iter().collect::<HashSet<_>>(),
-            [Remove, Insert].iter().cloned().collect::<HashSet<_>>()
-        );
+        assert_matches!(&e[..], [Remove, Insert] | [Insert, Remove]);
     }
 
     #[proptest]
     fn nodes_of_equal_kinds_can_be_replaced(a: MockNode<Eq>, b: MockNode<Eq>) {
         let (e, _) = diff(&a, &b);
         let (i, _) = levenshtein(a.children(), b.children());
-        assert_eq!(&*e, &[Replace(i)]);
+
+        assert_matches!(&e[..], [Replace(x)] => {
+            assert_eq!(x, &i);
+        });
     }
 
     #[proptest]
@@ -277,7 +277,8 @@ mod tests {
         b: MockNode<Eq>,
     ) {
         let (_, c) = diff(&a, &b);
-        assert!(c <= a.cost() - a.weight() + b.cost() - b.weight());
+        let (_, d) = levenshtein(a.children(), b.children());
+        assert_eq!(c, d);
     }
 
     #[proptest]
