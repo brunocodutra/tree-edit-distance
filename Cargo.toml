@@ -18,6 +18,11 @@ pathfinding = "2.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
+criterion = "0.3"
 json = "0.12"
 proptest = "1.0"
 test-strategy = "0.1"
+
+[[bench]]
+name = "diff"
+harness = false
