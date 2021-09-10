@@ -32,6 +32,39 @@ impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
     }
 }
 
+trait Fold<T = Self> {
+    fn fold<R>(&self, init: R, f: fn(R, &T) -> R) -> R;
+
+    fn count(&self) -> usize {
+        self.fold(0, |c, _| c + 1)
+    }
+}
+
+impl<'a, T: Fold<T>, B: Borrow<T>> Fold<T> for &'a [B] {
+    fn fold<R>(&self, init: R, f: fn(R, &T) -> R) -> R {
+        self.iter().fold(init, |r, b| b.borrow().fold(r, f))
+    }
+}
+
+impl Fold for Edit {
+    fn fold<R>(&self, init: R, f: fn(R, &Self) -> R) -> R {
+        if let Edit::Replace(c) = self {
+            c.deref().fold(f(init, self), f)
+        } else {
+            f(init, self)
+        }
+    }
+}
+
+impl<N> Fold for N
+where
+    for<'n> N: Node<'n>,
+{
+    fn fold<R>(&self, init: R, f: fn(R, &Self) -> R) -> R {
+        self.children().deref().fold(f(init, self), f)
+    }
+}
+
 trait NodeExt: for<'n> Node<'n> {
     fn cost(&self) -> <Self as Node>::Weight;
 }
@@ -39,14 +72,10 @@ trait NodeExt: for<'n> Node<'n> {
 impl<N, W> NodeExt for N
 where
     for<'n> N: Node<'n, Weight = W>,
-    W: Default + Copy + Ord + Add<Output = W>,
+    W: Default + Add<Output = W>,
 {
     fn cost(&self) -> W {
-        self.children()
-            .iter()
-            .map(Borrow::borrow)
-            .map(NodeExt::cost)
-            .fold(self.weight(), Add::add)
+        self.fold(W::default(), |w, c| w + c.weight())
     }
 }
 
@@ -204,41 +233,13 @@ mod tests {
         }
     }
 
-    trait Tree {
-        fn nodes(&self) -> usize;
-    }
-
-    impl<N> Tree for N
-    where
-        for<'n> N: Node<'n>,
-    {
-        fn nodes(&self) -> usize {
-            self.children()
-                .iter()
-                .map(Borrow::borrow)
-                .map(Tree::nodes)
-                .fold(1, Add::add)
-        }
-    }
-
-    impl Tree for Box<[Edit]> {
-        fn nodes(&self) -> usize {
-            self.iter()
-                .map(|e| match e {
-                    Replace(c) => c.nodes() + 1,
-                    _ => 1,
-                })
-                .sum()
-        }
-    }
-
     #[proptest]
     fn the_number_of_edits_is_at_most_equal_to_the_total_number_of_nodes(
         a: MockNode<u8>,
         b: MockNode<u8>,
     ) {
         let (e, _) = diff(&a, &b);
-        assert_matches!((e.nodes(), a.nodes() + b.nodes()), (x, y) if x <= y);
+        assert_matches!((e.deref().count(), a.count() + b.count()), (x, y) if x <= y);
     }
 
     #[proptest]
@@ -249,7 +250,9 @@ mod tests {
 
     #[proptest]
     fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
-        let (_, c) = diff(&a, &a);
+        let (e, c) = diff(&a, &a);
+
+        assert_eq!(e.deref().count(), a.count());
         assert_eq!(c, 0);
     }
 
