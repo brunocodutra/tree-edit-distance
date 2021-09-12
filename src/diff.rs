@@ -1,22 +1,24 @@
 use crate::{Node, Tree};
-use arrayvec::ArrayVec;
-use derive_more::{Add, From};
-use itertools::Itertools;
-use pathfinding::{num_traits::Zero, prelude::*};
-use std::ops::{Add, Deref};
-use std::{borrow::Borrow, collections::HashMap};
+use arrayvec::{ArrayVec, IntoIter};
+use derivative::Derivative;
+use itertools::{Itertools, Product};
+use petgraph::{algo::astar, visit::*};
+use std::collections::HashSet;
+use std::iter::{once, FlatMap, Map, Once};
+use std::ops::{Add, Deref, RangeInclusive};
+use std::{borrow::Borrow, collections::HashMap, fmt::Debug, marker::PhantomData};
 
 /// A single operation between two [Node]s.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Edit {
-    /// Swap the [Node]s and edit their children.
-    Replace(Box<[Edit]>),
+    /// Remove the existing [Node] along with its children.
+    Remove,
 
     /// Insert the incoming [Node] along with its children in place.
     Insert,
 
-    /// Remove the existing [Node] along with its children.
-    Remove,
+    /// Swap the [Node]s and edit their children.
+    Replace(Box<[Edit]>),
 }
 
 impl<'t> Tree<'t> for Edit {
@@ -29,19 +31,6 @@ impl<'t> Tree<'t> for Edit {
         } else {
             &[]
         }
-    }
-}
-
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
-struct Cost<T>(T);
-
-impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
-    fn zero() -> Self {
-        Self::default()
-    }
-
-    fn is_zero(&self) -> bool {
-        *self == Self::zero()
     }
 }
 
@@ -68,53 +57,165 @@ where
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Copy(bound = ""), Clone(bound = ""))]
+enum Edge<'n, N: Node<'n>> {
+    Remove(<Self as EdgeRef>::NodeId, &'n N),
+    Insert(<Self as EdgeRef>::NodeId, &'n N),
+    Replace(<Self as EdgeRef>::NodeId, &'n N, &'n N),
+}
+
+impl<'n, N: Node<'n>> EdgeRef for Edge<'n, N> {
+    type NodeId = (usize, usize);
+    type EdgeId = (Self::NodeId, Self::NodeId);
+    type Weight = ();
+
+    fn id(&self) -> Self::EdgeId {
+        (self.source(), self.target())
+    }
+
+    fn source(&self) -> Self::NodeId {
+        match *self {
+            Edge::Remove(s, ..) => s,
+            Edge::Insert(s, ..) => s,
+            Edge::Replace(s, ..) => s,
+        }
+    }
+
+    fn target(&self) -> Self::NodeId {
+        match *self {
+            Edge::Remove((i, j), ..) => (i + 1, j),
+            Edge::Insert((i, j), ..) => (i, j + 1),
+            Edge::Replace((i, j), ..) => (i + 1, j + 1),
+        }
+    }
+
+    fn weight(&self) -> &Self::Weight {
+        &()
+    }
+}
+
+#[derive(Derivative)]
+#[derivative(Copy(bound = ""), Clone(bound = ""))]
+struct Graph<'r, R: Borrow<N>, N: Node<'r>>(&'r [R], &'r [R], PhantomData<N>);
+
+impl<'r, R: Borrow<N>, N: Node<'r>> Graph<'r, R, N> {
+    fn new(a: &'r [R], b: &'r [R]) -> Self {
+        Graph(a, b, PhantomData)
+    }
+}
+
+impl<'r, R: Borrow<N>, N: Node<'r>> GraphBase for Graph<'r, R, N> {
+    type NodeId = <Edge<'r, N> as EdgeRef>::NodeId;
+    type EdgeId = <Edge<'r, N> as EdgeRef>::EdgeId;
+}
+
+impl<'r, R: Borrow<N>, N: Node<'r>> GraphRef for Graph<'r, R, N> {}
+
+impl<'r, R: Borrow<N>, N: Node<'r>> Data for Graph<'r, R, N> {
+    type NodeWeight = ();
+    type EdgeWeight = <Edge<'r, N> as EdgeRef>::Weight;
+}
+
+impl<'r, R: Borrow<N>, N: 'r + Node<'r>> IntoNeighbors for Graph<'r, R, N> {
+    type Neighbors = Map<
+        IntoIter<<Self as IntoEdgeReferences>::EdgeRef, 3>,
+        fn(<Self as IntoEdgeReferences>::EdgeRef) -> Self::NodeId,
+    >;
+
+    fn neighbors(self, id: Self::NodeId) -> Self::Neighbors {
+        self.edges(id).map(|e| e.target())
+    }
+}
+
+impl<'r, R: Borrow<N>, N: 'r + Node<'r>> IntoEdgeReferences for Graph<'r, R, N> {
+    type EdgeRef = Edge<'r, N>;
+    type EdgeReferences = FlatMap<
+        Product<Product<Once<Self>, RangeInclusive<usize>>, RangeInclusive<usize>>,
+        IntoIter<Self::EdgeRef, 3>,
+        fn(((Self, usize), usize)) -> IntoIter<Self::EdgeRef, 3>,
+    >;
+
+    fn edge_references(self) -> Self::EdgeReferences {
+        once(self)
+            .cartesian_product(0..=self.0.len())
+            .cartesian_product(0..=self.1.len())
+            .flat_map(|((g, i), j)| g.edges((i, j)))
+    }
+}
+
+impl<'r, R: Borrow<N>, N: 'r + Node<'r>> IntoEdges for Graph<'r, R, N> {
+    type Edges = IntoIter<Self::EdgeRef, 3>;
+
+    fn edges(self, (i, j): Self::NodeId) -> Self::Edges {
+        let a = self.0.get(i).map(Borrow::borrow);
+        let b = self.1.get(j).map(Borrow::borrow);
+
+        let mut edges = ArrayVec::<_, 3>::new();
+
+        if let Some(a) = a {
+            edges.push(Edge::Remove((i, j), a));
+        }
+
+        if let Some(b) = b {
+            edges.push(Edge::Insert((i, j), b));
+        }
+
+        if let (Some(a), Some(b)) = (a, b) {
+            if a.kind() == b.kind() {
+                edges.push(Edge::Replace((i, j), a, b));
+            }
+        }
+
+        edges.into_iter()
+    }
+}
+
+impl<'r, R: Borrow<N>, N: 'r + Node<'r>> NodeCount for Graph<'r, R, N> {
+    fn node_count(self: &Self) -> usize {
+        (self.0.len() + 1) * (self.1.len() + 1)
+    }
+}
+
+impl<'r, R: Borrow<N>, N: 'r + Node<'r>> Visitable for Graph<'r, R, N> {
+    type Map = HashSet<Self::NodeId>;
+
+    fn visit_map(self: &Self) -> Self::Map {
+        HashSet::with_capacity(self.node_count())
+    }
+
+    fn reset_map(self: &Self, map: &mut Self::Map) {
+        map.clear();
+        map.reserve(self.node_count().saturating_sub(map.capacity()))
+    }
+}
+
 fn levenshtein<N, W, R, S>(a: S, b: S) -> (Box<[Edit]>, W)
 where
     for<'n> N: Node<'n, Weight = W> + Tree<'n>,
-    W: Default + Copy + Ord + Add<Output = W>,
+    W: Debug + Default + Copy + Ord + Add<Output = W>,
     R: Borrow<N>,
     S: Deref<Target = [R]>,
 {
     let mut edges = HashMap::new();
 
-    let (path, Cost(cost)) = dijkstra(
-        &(0, 0),
-        |&(x, y)| {
-            use Edit::*;
-
-            let a = a.get(x).map(Borrow::borrow);
-            let b = b.get(y).map(Borrow::borrow);
-
-            let mut successors = ArrayVec::<_, 3>::new();
-
-            if let Some(a) = a {
-                let next = (x + 1, y);
-                let none = edges.insert(((x, y), next), Remove);
-                debug_assert!(none.is_none());
-                successors.push((next, a.sum(|n| n.weight()).into()));
-            }
-
-            if let Some(b) = b {
-                let next = (x, y + 1);
-                let none = edges.insert(((x, y), next), Insert);
-                debug_assert!(none.is_none());
-                successors.push((next, b.sum(|n| n.weight()).into()));
-            }
-
-            if let (Some(a), Some(b)) = (a, b) {
-                if a.kind() == b.kind() {
-                    let (inner, cost) = levenshtein(a.children(), b.children());
-
-                    let next = (x + 1, y + 1);
-                    let none = edges.insert(((x, y), next), Replace(inner));
-                    debug_assert!(none.is_none());
-                    successors.push((next, cost.into()));
+    let (cost, path) = astar(
+        Graph::new(&a, &b),
+        (0, 0),
+        |p| p == (a.len(), b.len()),
+        |e| {
+            let (_, cost) = edges.entry(e.id()).or_insert_with(|| match e {
+                Edge::Remove(_, n) => (Edit::Remove, n.sum(|n| n.weight())),
+                Edge::Insert(_, n) => (Edit::Insert, n.sum(|n| n.weight())),
+                Edge::Replace(_, a, b) => {
+                    let (inner, w) = levenshtein(a.children(), b.children());
+                    (Edit::Replace(inner), w)
                 }
-            }
+            });
 
-            successors
+            *cost
         },
-        |&p| p == (a.len(), b.len()),
+        |_| N::Weight::default(),
     )
     .unwrap();
 
@@ -122,6 +223,7 @@ where
         .into_iter()
         .tuple_windows()
         .flat_map(move |e| edges.remove(&e))
+        .map(|(e, _)| e)
         .collect();
 
     (patches, cost)
@@ -134,7 +236,7 @@ where
 pub fn diff<N, W>(a: &N, b: &N) -> (Box<[Edit]>, W)
 where
     for<'n> N: Node<'n, Weight = W> + Tree<'n>,
-    W: Default + Copy + Ord + Add<Output = W>,
+    W: Debug + Default + Copy + Ord + Add<Output = W>,
 {
     levenshtein::<N, _, _, &[_]>(&[a], &[b])
 }
@@ -143,11 +245,10 @@ where
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use derive_more::From;
     use proptest::collection::{size_range, vec};
     use proptest::{prelude::*, strategy::LazyJust};
-    use std::fmt::Debug;
     use test_strategy::{proptest, Arbitrary};
-    use Edit::*;
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, From)]
     pub struct Size {
@@ -250,6 +351,8 @@ mod tests {
 
     #[proptest]
     fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
+        use Edit::*;
+
         let (e, _) = diff(&a, &b);
         assert_matches!(&e[..], [Remove, Insert] | [Insert, Remove]);
     }
@@ -259,7 +362,7 @@ mod tests {
         let (e, _) = diff(&a, &b);
         let (i, _) = levenshtein(a.children(), b.children());
 
-        assert_matches!(&e[..], [Replace(x)] => {
+        assert_matches!(&e[..], [Edit::Replace(x)] => {
             assert_eq!(x, &i);
         });
     }

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::ops::Add;
 
 /// An abstraction for a generic tree node.
@@ -13,7 +14,7 @@ pub trait Node<'n> {
     /// A type whose values encode this [Node]'s _weight_.
     ///
     /// The default value of this type is assumed to be the additive identity (i.e. _zero_).
-    type Weight: Default + Copy + Ord + Add<Output = Self::Weight>;
+    type Weight: Debug + Default + Copy + PartialOrd + Add<Output = Self::Weight>;
 
     /// Returns the cost of inserting or deleting this [Node].
     fn weight(&'n self) -> Self::Weight;
