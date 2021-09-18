@@ -1,4 +1,4 @@
-use crate::Node;
+use crate::{Node, Tree};
 use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
@@ -19,6 +19,19 @@ pub enum Edit {
     Remove,
 }
 
+impl<'t> Tree<'t> for Edit {
+    type Child = Self;
+    type Children = &'t [Self];
+
+    fn children(&'t self) -> Self::Children {
+        if let Edit::Replace(c) = self {
+            c
+        } else {
+            &[]
+        }
+    }
+}
+
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
 struct Cost<T>(T);
 
@@ -32,56 +45,32 @@ impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
     }
 }
 
-trait Fold<T = Self> {
-    fn fold<R>(&self, init: R, f: fn(R, &T) -> R) -> R;
+trait Fold {
+    fn fold<R, F: FnMut(R, &Self) -> R>(&self, init: R, f: &mut F) -> R;
 
-    fn count(&self) -> usize {
-        self.fold(0, |c, _| c + 1)
+    fn sum<N: Default + Add<Output = N>, F: FnMut(&Self) -> N>(&self, mut f: F) -> N {
+        self.fold(N::default(), &mut |n, c| n + f(c))
+    }
+
+    fn len(&self) -> usize {
+        self.sum(|_| 1)
     }
 }
 
-impl<'a, T: Fold<T>, B: Borrow<T>> Fold<T> for &'a [B] {
-    fn fold<R>(&self, init: R, f: fn(R, &T) -> R) -> R {
-        self.iter().fold(init, |r, b| b.borrow().fold(r, f))
-    }
-}
-
-impl Fold for Edit {
-    fn fold<R>(&self, init: R, f: fn(R, &Self) -> R) -> R {
-        if let Edit::Replace(c) = self {
-            c.deref().fold(f(init, self), f)
-        } else {
-            f(init, self)
-        }
-    }
-}
-
-impl<N> Fold for N
+impl<T: ?Sized> Fold for T
 where
-    for<'n> N: Node<'n>,
+    for<'t> T: Tree<'t>,
 {
-    fn fold<R>(&self, init: R, f: fn(R, &Self) -> R) -> R {
-        self.children().deref().fold(f(init, self), f)
-    }
-}
-
-trait NodeExt: for<'n> Node<'n> {
-    fn cost(&self) -> <Self as Node>::Weight;
-}
-
-impl<N, W> NodeExt for N
-where
-    for<'n> N: Node<'n, Weight = W>,
-    W: Default + Add<Output = W>,
-{
-    fn cost(&self) -> W {
-        self.fold(W::default(), |w, c| w + c.weight())
+    fn fold<R, F: FnMut(R, &Self) -> R>(&self, init: R, f: &mut F) -> R {
+        self.children()
+            .iter()
+            .fold(f(init, self), |r, b| b.borrow().fold(r, f))
     }
 }
 
 fn levenshtein<N, W, R, S>(a: S, b: S) -> (Box<[Edit]>, W)
 where
-    for<'n> N: Node<'n, Weight = W> + NodeExt,
+    for<'n> N: Node<'n, Weight = W> + Tree<'n>,
     W: Default + Copy + Ord + Add<Output = W>,
     R: Borrow<N>,
     S: Deref<Target = [R]>,
@@ -102,14 +91,14 @@ where
                 let next = (x + 1, y);
                 let none = edges.insert(((x, y), next), Remove);
                 debug_assert!(none.is_none());
-                successors.push((next, a.cost().into()));
+                successors.push((next, a.sum(|n| n.weight()).into()));
             }
 
             if let Some(b) = b {
                 let next = (x, y + 1);
                 let none = edges.insert(((x, y), next), Insert);
                 debug_assert!(none.is_none());
-                successors.push((next, b.cost().into()));
+                successors.push((next, b.sum(|n| n.weight()).into()));
             }
 
             if let (Some(a), Some(b)) = (a, b) {
@@ -144,7 +133,7 @@ where
 /// right-hand side.
 pub fn diff<N, W>(a: &N, b: &N) -> (Box<[Edit]>, W)
 where
-    for<'n> N: Node<'n, Weight = W>,
+    for<'n> N: Node<'n, Weight = W> + Tree<'n>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
     levenshtein::<N, _, _, &[_]>(&[a], &[b])
@@ -213,10 +202,12 @@ mod tests {
         fn weight(&self) -> Self::Weight {
             self.weight
         }
+    }
 
+    impl<'t, K: 't> Tree<'t> for MockNode<K> {
         type Child = Self;
-        type Children = &'n [Self];
-        fn children(&'n self) -> Self::Children {
+        type Children = &'t [Self];
+        fn children(&'t self) -> Self::Children {
             &self.children
         }
     }
@@ -239,20 +230,21 @@ mod tests {
         b: MockNode<u8>,
     ) {
         let (e, _) = diff(&a, &b);
-        assert_matches!((e.deref().count(), a.count() + b.count()), (x, y) if x <= y);
+        let edits: usize = e.iter().map(Edit::len).sum();
+        assert_matches!((edits, a.len() + b.len()), (x, y) if x <= y);
     }
 
     #[proptest]
     fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockNode<u8>, b: MockNode<u8>) {
         let (_, c) = diff(&a, &b);
-        assert_matches!((c, a.cost() + b.cost()), (x, y) if x <= y);
+        assert_matches!((c, a.sum(|n| n.weight()) + b.sum(|n| n.weight())), (x, y) if x <= y);
     }
 
     #[proptest]
-    fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
+    fn the_cost_between_identical_trees_cis_zero(a: MockNode<u8>) {
         let (e, c) = diff(&a, &a);
-
-        assert_eq!(e.deref().count(), a.count());
+        let edits: usize = e.iter().map(Edit::len).sum();
+        assert_eq!(edits, a.len());
         assert_eq!(c, 0);
     }
 
@@ -278,7 +270,7 @@ mod tests {
         b: MockNode<NotEq>,
     ) {
         let (_, c) = diff(&a, &b);
-        assert_eq!(c, a.cost() + b.cost());
+        assert_eq!(c, a.sum(|n| n.weight()) + b.sum(|n| n.weight()));
     }
 
     #[proptest]
@@ -307,6 +299,6 @@ mod tests {
         let (_, c) = levenshtein(a, b);
         let (_, d) = levenshtein(x, y);
 
-        assert_matches!((c, d + m.cost() + n.cost()), (x, y) if x <= y);
+        assert_matches!((c, d + m.sum(|n| n.weight()) + n.sum(|n| n.weight())), (x, y) if x <= y);
     }
 }

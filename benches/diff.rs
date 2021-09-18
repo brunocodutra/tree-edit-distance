@@ -1,11 +1,10 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use derive_more::{Deref, From};
 use itertools::Itertools;
 use tree_edit_distance::{diff, Node};
 
-#[derive(Default, Clone)]
-struct Tree {
-    children: Vec<Self>,
-}
+#[derive(Default, Clone, From, Deref)]
+struct Tree(#[deref(forward)] Vec<Self>);
 
 impl<'n> Node<'n> for Tree {
     type Kind = ();
@@ -15,27 +14,20 @@ impl<'n> Node<'n> for Tree {
     fn weight(&'n self) -> Self::Weight {
         1
     }
-
-    type Child = Self;
-    type Children = &'n [Self];
-    fn children(&'n self) -> Self::Children {
-        &self.children
-    }
 }
 
 fn tree(leaves: Vec<Tree>, r: usize) -> Tree {
     if leaves.len() < r {
-        Tree { children: leaves }
+        leaves.into()
     } else {
-        let n = (leaves.len() + r - 1) / r;
-        Tree {
-            children: leaves
-                .into_iter()
-                .chunks(n)
-                .into_iter()
-                .map(|c| tree(c.collect(), r))
-                .collect(),
-        }
+        let chunks = (leaves.len() + r - 1) / r;
+        leaves
+            .into_iter()
+            .chunks(chunks)
+            .into_iter()
+            .map(|c| tree(c.collect(), r))
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
