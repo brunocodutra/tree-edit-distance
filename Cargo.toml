@@ -23,6 +23,9 @@ json = "0.12"
 proptest = "1.0"
 test-strategy = "0.1"
 
+[lib]
+bench = false
+
 [[bench]]
 name = "diff"
 harness = false
