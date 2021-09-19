@@ -11,7 +11,7 @@
 //! # Example
 //!
 //! ```rust
-//! use tree_edit_distance::{Edit, diff, Node};
+//! use tree_edit_distance::*;
 //! # use json::{object, JsonValue};
 //! use std::mem::{discriminant, Discriminant};
 //!
@@ -34,10 +34,12 @@
 //!     fn weight(&self) -> Self::Weight {
 //!         1
 //!     }
+//! }
 //!
-//!     type Child = &'n Self;
+//! impl<'t> Tree<'t> for Json {
+//!     type Child = &'t Self;
 //!     type Children = Box<[Self::Child]>;
-//!     fn children(&'n self) -> Self::Children {
+//!     fn children(&'t self) -> Self::Children {
 //!         match self {
 //!             Json::Array(a) => a.iter().collect(),
 //!             Json::Map(m) => m.iter().map(|(_, v)| v).collect(),
@@ -108,7 +110,11 @@
 //! ```
 
 mod diff;
+mod edit;
 mod node;
+mod tree;
 
-pub use diff::{diff, Edit};
-pub use node::Node;
+pub use diff::*;
+pub use edit::*;
+pub use node::*;
+pub use tree::*;
