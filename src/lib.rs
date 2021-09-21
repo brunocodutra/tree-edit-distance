@@ -98,12 +98,12 @@
 //!
 //! assert_eq!(&*edits, &[
 //!     Edit::Replace(Box::new([
-//!         Edit::Replace(Box::default()),      // "name"
-//!         Edit::Insert,                       // "maiden name"
+//!         Edit::Insert,                       // "name"
+//!         Edit::Replace(Box::default()),      // "maiden name"
 //!         Edit::Replace(Box::default()),      // "age"
 //!         Edit::Replace(Box::new([            // "phones"
+//!             Edit::Remove,
 //!             Edit::Replace(Box::default()),
-//!             Edit::Remove
 //!         ])),
 //!     ]))
 //! ]);
