@@ -28,40 +28,56 @@ where
 {
     let mut edges = HashMap::new();
 
-    let (path, Cost(cost)) = dijkstra(
+    let (path, Cost(cost)) = astar(
         &(0, 0),
-        |&(x, y)| {
-            let a = a.get(x).map(Borrow::borrow);
-            let b = b.get(y).map(Borrow::borrow);
+        |&(i, j)| {
+            let x = a.get(i).map(B::borrow);
+            let y = b.get(j).map(B::borrow);
 
             let mut successors = ArrayVec::<_, 3>::new();
 
-            if let Some(a) = a {
-                let next = (x + 1, y);
-                let none = edges.insert(((x, y), next), Edit::Remove);
+            if let Some(x) = x {
+                let next = (i + 1, j);
+                let none = edges.insert(((i, j), next), Edit::Remove);
                 debug_assert!(none.is_none());
-                successors.push((next, a.cost().into()));
+                successors.push((next, x.cost().into()));
             }
 
-            if let Some(b) = b {
-                let next = (x, y + 1);
-                let none = edges.insert(((x, y), next), Edit::Insert);
+            if let Some(y) = y {
+                let next = (i, j + 1);
+                let none = edges.insert(((i, j), next), Edit::Insert);
                 debug_assert!(none.is_none());
-                successors.push((next, b.cost().into()));
+                successors.push((next, y.cost().into()));
             }
 
-            if let (Some(a), Some(b)) = (a, b) {
-                if a.kind() == b.kind() {
-                    let (inner, cost) = levenshtein(a.children(), b.children());
-
-                    let next = (x + 1, y + 1);
-                    let none = edges.insert(((x, y), next), Edit::Replace(inner));
+            if let (Some(x), Some(y)) = (x, y) {
+                if x.kind() == y.kind() {
+                    let next = (i + 1, j + 1);
+                    let (inner, cost) = levenshtein(x.children(), y.children());
+                    let none = edges.insert(((i, j), next), Edit::Replace(inner));
                     debug_assert!(none.is_none());
                     successors.push((next, cost.into()));
                 }
             }
 
             successors
+        },
+        |&(i, j)| match (&a[i..], &b[j..]) {
+            (&[], rest) | (rest, &[]) => rest
+                .iter()
+                .map(B::borrow)
+                .map(N::cost)
+                .fold(Cost::default(), |r, c| r + c.into()),
+
+            (a, b) if a.len() != b.len() => {
+                let rest = if a.len() > b.len() { a } else { b };
+                let nth = a.len().max(b.len()) - a.len().min(b.len());
+                let mut costs: Box<[_]> = rest.iter().map(B::borrow).map(N::cost).collect();
+                let (cheapest, _, _) = costs.select_nth_unstable(nth);
+                cheapest.iter().fold(Cost::default(), |r, &c| r + c.into())
+            }
+
+            _ => Cost::default(),
         },
         |&p| p == (a.len(), b.len()),
     )
