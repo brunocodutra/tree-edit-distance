@@ -118,3 +118,7 @@ pub use diff::*;
 pub use edit::*;
 pub use node::*;
 pub use tree::*;
+
+mod fold;
+
+pub(crate) use fold::*;

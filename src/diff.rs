@@ -107,7 +107,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{MockNode, Tree, TreeExt};
+    use crate::{Fold, MockNode, Tree};
     use assert_matches::assert_matches;
     use proptest::collection::size_range;
     use test_strategy::{proptest, Arbitrary};
@@ -130,8 +130,7 @@ mod tests {
         b: MockNode<u8>,
     ) {
         let (e, _) = diff(&a, &b);
-        let edits: usize = e.iter().map(Edit::len).sum();
-        assert_matches!((edits, a.len() + b.len()), (x, y) if x <= y);
+        assert_matches!((e.count(), a.count() + b.count()), (x, y) if x <= y);
     }
 
     #[proptest]
@@ -143,8 +142,7 @@ mod tests {
     #[proptest]
     fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
         let (e, c) = diff(&a, &a);
-        let edits: usize = e.iter().map(Edit::len).sum();
-        assert_eq!(edits, a.len());
+        assert_eq!(e.count(), a.count());
         assert_eq!(c, 0);
     }
 

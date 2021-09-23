@@ -1,5 +1,5 @@
-use std::borrow::Borrow;
-use std::ops::{Add, Deref};
+use crate::Fold;
+use std::{borrow::Borrow, ops::Deref};
 
 /// An abstraction for a recursive tree.
 pub trait Tree<'t> {
@@ -15,25 +15,13 @@ pub trait Tree<'t> {
     fn children(&'t self) -> Self::Children;
 }
 
-pub(crate) trait TreeExt: for<'t> Tree<'t> {
-    fn fold<R, F: FnMut(R, &Self) -> R>(&self, init: R, f: &mut F) -> R {
+impl<T: ?Sized + for<'t> Tree<'t>> Fold for T {
+    fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
         self.children()
             .iter()
             .fold(f(init, self), |r, b| b.borrow().fold(r, f))
     }
-
-    #[inline]
-    fn sum<N: Default + Add<Output = N>, F: FnMut(&Self) -> N>(&self, mut f: F) -> N {
-        self.fold(N::default(), &mut |n, c| n + f(c))
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.sum(|_| 1)
-    }
 }
-
-impl<T: ?Sized> TreeExt for T where T: for<'t> Tree<'t> {}
 
 #[cfg(test)]
 mod tests {
@@ -90,11 +78,8 @@ mod tests {
     }
 
     #[proptest]
-    fn len_equals_one_plus_sum_of_len_of_children(t: MockTree<()>) {
-        assert_eq!(
-            t.len(),
-            1 + t.children().iter().map(MockTree::len).sum::<usize>()
-        );
+    fn count_equals_one_plus_sum_of_count_of_children(t: MockTree<()>) {
+        assert_eq!(t.count(), 1 + t.children().count());
     }
 }
 
