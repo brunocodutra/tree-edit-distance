@@ -1,4 +1,4 @@
-use crate::{Tree, TreeExt};
+use crate::{Fold, Tree};
 use std::ops::Add;
 
 /// An abstraction for a generic tree node.
@@ -40,7 +40,7 @@ where
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
     use crate::MockTree;
     use test_strategy::proptest;
@@ -60,7 +60,7 @@ pub(crate) mod tests {
     }
 
     #[proptest]
-    fn cost_equals_weight_plus_sum_of_cost_of_children(n: MockNode<()>) {
+    fn cost_equals_weight_plus_sum_of_costs_of_children(n: MockNode<()>) {
         assert_eq!(
             n.cost(),
             n.weight() + n.children().iter().map(MockNode::cost).sum::<u64>()
