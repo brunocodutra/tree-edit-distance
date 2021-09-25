@@ -3,8 +3,7 @@ use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
 use pathfinding::{num_traits::Zero, prelude::*};
-use std::ops::{Add, Deref};
-use std::{borrow::Borrow, collections::HashMap};
+use std::{borrow::Borrow, collections::HashMap, iter::FromIterator, ops::Add};
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
 struct WholeNumber<T>(T);
@@ -19,13 +18,16 @@ impl<T: Default + Eq + Add<Output = T>> Zero for WholeNumber<T> {
     }
 }
 
-fn levenshtein<T, W, B, D>(a: D, b: D) -> (Box<[Edit]>, W)
+fn levenshtein<T, W, B, I>(a: I, b: I) -> (Box<[Edit]>, W)
 where
     T: for<'t> Tree<'t, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
     B: Borrow<T>,
-    D: Deref<Target = [B]>,
+    I: IntoIterator<Item = B>,
 {
+    let a = Box::from_iter(a);
+    let b = Box::from_iter(b);
+
     let mut edges = HashMap::new();
 
     let (path, WholeNumber(cost)) = astar(
@@ -101,7 +103,7 @@ where
     T: for<'t> Tree<'t, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
-    levenshtein::<T, _, _, &[_]>(&[a], &[b])
+    levenshtein::<T, _, _, _>(Some(a), Some(b))
 }
 
 #[cfg(test)]
@@ -156,7 +158,7 @@ mod tests {
     #[proptest]
     fn nodes_of_equal_kinds_can_be_replaced(a: MockTree<Eq>, b: MockTree<Eq>) {
         let (e, _) = diff(&a, &b);
-        let (i, _) = levenshtein(a.children(), b.children());
+        let (i, _) = levenshtein::<MockTree<Eq>, _, _, _>(a.children(), b.children());
 
         assert_matches!(&e[..], [Edit::Replace(x)] => {
             assert_eq!(x, &i);
@@ -178,7 +180,7 @@ mod tests {
         b: MockTree<Eq>,
     ) {
         let (_, c) = diff(&a, &b);
-        let (_, d) = levenshtein(a.children(), b.children());
+        let (_, d) = levenshtein::<MockTree<Eq>, _, _, _>(a.children(), b.children());
         assert_eq!(c, d);
     }
 

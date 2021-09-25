@@ -14,6 +14,7 @@
 //! use tree_edit_distance::*;
 //! # use json::{object, JsonValue};
 //! use std::mem::{discriminant, Discriminant};
+//! use std::iter::empty;
 //!
 //! enum Json {
 //!     Null,
@@ -38,12 +39,12 @@
 //!
 //! impl<'t> Tree<'t> for Json {
 //!     type Child = &'t Self;
-//!     type Children = Box<[Self::Child]>;
+//!     type Children = Box<dyn Iterator<Item = Self::Child> + 't>;
 //!     fn children(&'t self) -> Self::Children {
 //!         match self {
-//!             Json::Array(a) => a.iter().collect(),
-//!             Json::Map(m) => m.iter().map(|(_, v)| v).collect(),
-//!             _ => Box::default(),
+//!             Json::Array(a) => Box::new(a.iter()),
+//!             Json::Map(m) => Box::new(m.iter().map(|(_, v)| v)),
+//!             _ => Box::new(empty()),
 //!         }
 //!     }
 //! }
