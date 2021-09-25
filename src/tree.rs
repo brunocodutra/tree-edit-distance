@@ -1,6 +1,5 @@
 use crate::{Cost, Fold};
-use std::borrow::Borrow;
-use std::ops::{Add, Deref};
+use std::{borrow::Borrow, ops::Add};
 
 /// An abstraction for a generic tree node.
 pub trait Node<'n> {
@@ -30,8 +29,8 @@ pub trait Tree<'t>: Node<'t> {
     /// This is often just `Self` or `&'t Self`, but need not necessarily be.
     type Child: Borrow<Self>;
 
-    /// A type that holds this [Tree]'s [children][Tree::children] as a contiguous sequence (i.e. a _slice_).
-    type Children: Deref<Target = [Self::Child]>;
+    /// A type that can iterate over this [Tree]'s [children][Tree::children].
+    type Children: IntoIterator<Item = Self::Child>;
 
     /// Returns this [Tree]'s immediate children.
     fn children(&'t self) -> Self::Children;
@@ -40,7 +39,7 @@ pub trait Tree<'t>: Node<'t> {
 impl<T: ?Sized + for<'t> Tree<'t>> Fold for T {
     fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
         self.children()
-            .iter()
+            .into_iter()
             .fold(f(init, self), |r, b| b.borrow().fold(r, f))
     }
 }
@@ -114,7 +113,7 @@ mod tests {
     }
 
     impl<'t, K: 't + PartialEq> Tree<'t> for MockTree<K> {
-        type Child = Self;
+        type Child = &'t Self;
         type Children = &'t [Self];
         fn children(&'t self) -> Self::Children {
             &self.children
