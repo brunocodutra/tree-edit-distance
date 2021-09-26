@@ -1,5 +1,4 @@
-use crate::{Cost, Fold};
-use std::{borrow::Borrow, ops::Add};
+use std::ops::Add;
 
 /// An abstraction for a generic tree node.
 pub trait Node<'n> {
@@ -23,39 +22,18 @@ pub trait Node<'n> {
 }
 
 /// An abstraction for a recursive tree.
-pub trait Tree<'t>: Node<'t> {
-    /// A type that may be borrowed as `&Self`.
-    ///
-    /// This is often just `Self` or `&'t Self`, but need not necessarily be.
-    type Child: Borrow<Self>;
-
+pub trait Tree<'t>: 't + Node<'t> {
     /// A type that can iterate over this [Tree]'s [children][Tree::children].
-    type Children: IntoIterator<Item = Self::Child>;
+    type Children: IntoIterator<Item = &'t Self>;
 
     /// Returns this [Tree]'s immediate children.
     fn children(&'t self) -> Self::Children;
 }
 
-impl<T: ?Sized + for<'t> Tree<'t>> Fold for T {
-    fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
-        self.children()
-            .into_iter()
-            .fold(f(init, self), |r, b| b.borrow().fold(r, f))
-    }
-}
-
-impl<T: ?Sized + for<'t> Tree<'t, Weight = W>, W: Default + Add<Output = W>> Cost for T {
-    type Output = W;
-
-    #[inline]
-    fn cost(&self) -> Self::Output {
-        self.sum(|c| c.weight())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Cost, Fold};
     use derive_more::From;
     use proptest::{collection::vec, prelude::*, strategy::LazyJust};
     use test_strategy::proptest;
@@ -113,10 +91,30 @@ mod tests {
     }
 
     impl<'t, K: 't + PartialEq> Tree<'t> for MockTree<K> {
-        type Child = &'t Self;
         type Children = &'t [Self];
         fn children(&'t self) -> Self::Children {
             &self.children
+        }
+    }
+
+    impl<K: PartialEq> Fold for MockTree<K>
+    where
+        Self: for<'t> Tree<'t, Children = &'t [Self]>,
+    {
+        fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
+            self.children().fold(f(init, self), f)
+        }
+    }
+
+    impl<K: PartialEq, W: Default + Copy + Add<Output = W>> Cost for MockTree<K>
+    where
+        Self: for<'t> Tree<'t, Weight = W, Children = &'t [Self]>,
+    {
+        type Output = W;
+
+        #[inline]
+        fn cost(&self) -> Self::Output {
+            self.sum(|c| c.weight())
         }
     }
 
@@ -126,11 +124,8 @@ mod tests {
     }
 
     #[proptest]
-    fn cost_equals_weight_plus_sum_of_costs_of_children(n: MockTree<()>) {
-        assert_eq!(
-            n.cost(),
-            n.weight() + n.children().iter().map(MockTree::cost).sum::<u64>()
-        );
+    fn cost_equals_weight_plus_sum_of_costs_of_children(t: MockTree<()>) {
+        assert_eq!(t.cost(), t.weight() + t.children().cost());
     }
 }
 

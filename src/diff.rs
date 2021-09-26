@@ -1,9 +1,9 @@
-use crate::{Cost, Edit, Tree};
+use crate::{memoize, Cost, Edit, Tree};
 use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
 use pathfinding::{num_traits::Zero, prelude::*};
-use std::{borrow::Borrow, collections::HashMap, iter::FromIterator, ops::Add};
+use std::{collections::HashMap, ops::Add};
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
 struct WholeNumber<T>(T);
@@ -18,23 +18,18 @@ impl<T: Default + Eq + Add<Output = T>> Zero for WholeNumber<T> {
     }
 }
 
-fn levenshtein<T, W, B, I>(a: I, b: I) -> (Box<[Edit]>, W)
+fn levenshtein<'t, T, W>(a: &'t [T], b: &'t [T]) -> (Box<[Edit]>, W)
 where
-    T: for<'t> Tree<'t, Weight = W>,
+    T: Tree<'t, Weight = W, Children = &'t [T]> + Cost<Output = W>,
     W: Default + Copy + Ord + Add<Output = W>,
-    B: Borrow<T>,
-    I: IntoIterator<Item = B>,
 {
-    let a = Box::from_iter(a);
-    let b = Box::from_iter(b);
-
     let mut edges = HashMap::new();
 
     let (path, WholeNumber(cost)) = astar(
         &(0, 0),
         |&(i, j)| {
-            let x = a.get(i).map(B::borrow);
-            let y = b.get(j).map(B::borrow);
+            let x = a.get(i);
+            let y = b.get(j);
 
             let mut successors = ArrayVec::<_, 3>::new();
 
@@ -65,18 +60,14 @@ where
             successors
         },
         |&(i, j)| match (&a[i..], &b[j..]) {
-            (&[], rest) | (rest, &[]) => rest
-                .iter()
-                .fold(WholeNumber::default(), |r, t| r + t.borrow().cost().into()),
+            (&[], rest) | (rest, &[]) => rest.cost().into(),
 
             (a, b) if a.len() != b.len() => {
                 let rest = if a.len() > b.len() { a } else { b };
                 let nth = a.len().max(b.len()) - a.len().min(b.len());
-                let mut costs: Box<[_]> = rest.iter().map(B::borrow).map(T::cost).collect();
+                let mut costs: Box<[_]> = rest.iter().map(T::cost).collect();
                 let (cheapest, _, _) = costs.select_nth_unstable(nth);
-                cheapest
-                    .iter()
-                    .fold(WholeNumber::default(), |r, &c| r + c.into())
+                cheapest.cost().into()
             }
 
             _ => WholeNumber::default(),
@@ -103,7 +94,7 @@ where
     T: for<'t> Tree<'t, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
-    levenshtein::<T, _, _, _>(Some(a), Some(b))
+    levenshtein(&[memoize(a)], &[memoize(b)])
 }
 
 #[cfg(test)]
@@ -158,7 +149,7 @@ mod tests {
     #[proptest]
     fn nodes_of_equal_kinds_can_be_replaced(a: MockTree<Eq>, b: MockTree<Eq>) {
         let (e, _) = diff(&a, &b);
-        let (i, _) = levenshtein::<MockTree<Eq>, _, _, _>(a.children(), b.children());
+        let (i, _) = levenshtein(a.children(), b.children());
 
         assert_matches!(&e[..], [Edit::Replace(x)] => {
             assert_eq!(x, &i);
@@ -180,7 +171,7 @@ mod tests {
         b: MockTree<Eq>,
     ) {
         let (_, c) = diff(&a, &b);
-        let (_, d) = levenshtein::<MockTree<Eq>, _, _, _>(a.children(), b.children());
+        let (_, d) = levenshtein(a.children(), b.children());
         assert_eq!(c, d);
     }
 
@@ -197,8 +188,8 @@ mod tests {
         let m = x.remove(i);
         let n = y.remove(j);
 
-        let (_, c) = levenshtein(a, b);
-        let (_, d) = levenshtein(x, y);
+        let (_, c) = levenshtein(&a, &b);
+        let (_, d) = levenshtein(&x, &y);
 
         assert_matches!((c, d + m.cost() + n.cost()), (x, y) if x <= y);
     }

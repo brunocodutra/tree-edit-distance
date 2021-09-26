@@ -14,6 +14,7 @@ pub enum Edit {
 }
 
 impl Fold for Edit {
+    #[inline]
     fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
         if let Edit::Replace(c) = self {
             c.fold(f(init, self), f)

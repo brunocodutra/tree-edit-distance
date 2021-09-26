@@ -21,7 +21,6 @@ impl<'n> Node<'n> for TreeNode {
 }
 
 impl<'t> Tree<'t> for TreeNode {
-    type Child = &'t Self;
     type Children = &'t [Self];
     fn children(&'t self) -> Self::Children {
         &self.children
