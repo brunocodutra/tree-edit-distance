@@ -111,12 +111,10 @@
 
 mod diff;
 mod edit;
-mod node;
 mod tree;
 
 pub use diff::*;
 pub use edit::*;
-pub use node::*;
 pub use tree::*;
 
 mod cost;
