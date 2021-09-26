@@ -1,4 +1,4 @@
-use crate::{Cost, Edit, Node};
+use crate::{Cost, Edit, Tree};
 use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
@@ -19,11 +19,11 @@ impl<T: Default + Eq + Add<Output = T>> Zero for WholeNumber<T> {
     }
 }
 
-fn levenshtein<N, W, B, D>(a: D, b: D) -> (Box<[Edit]>, W)
+fn levenshtein<T, W, B, D>(a: D, b: D) -> (Box<[Edit]>, W)
 where
-    N: for<'n> Node<'n, Weight = W>,
+    T: for<'t> Tree<'t, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
-    B: Borrow<N>,
+    B: Borrow<T>,
     D: Deref<Target = [B]>,
 {
     let mut edges = HashMap::new();
@@ -70,7 +70,7 @@ where
             (a, b) if a.len() != b.len() => {
                 let rest = if a.len() > b.len() { a } else { b };
                 let nth = a.len().max(b.len()) - a.len().min(b.len());
-                let mut costs: Box<[_]> = rest.iter().map(B::borrow).map(N::cost).collect();
+                let mut costs: Box<[_]> = rest.iter().map(B::borrow).map(T::cost).collect();
                 let (cheapest, _, _) = costs.select_nth_unstable(nth);
                 cheapest
                     .iter()
@@ -92,22 +92,22 @@ where
     (patches, cost)
 }
 
-/// Finds the lowest cost sequence of [Edit]s that transforms one tree of [Node]s into the other.
+/// Finds the lowest cost sequence of [Edit]s that transforms one [Tree] into the other.
 ///
 /// The sequence of [Edit]s is understood to apply to the left-hand side so it becomes the
 /// right-hand side.
-pub fn diff<N, W>(a: &N, b: &N) -> (Box<[Edit]>, W)
+pub fn diff<T, W>(a: &T, b: &T) -> (Box<[Edit]>, W)
 where
-    N: for<'n> Node<'n, Weight = W>,
+    T: for<'t> Tree<'t, Weight = W>,
     W: Default + Copy + Ord + Add<Output = W>,
 {
-    levenshtein::<N, _, _, &[_]>(&[a], &[b])
+    levenshtein::<T, _, _, &[_]>(&[a], &[b])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Fold, MockNode, Tree};
+    use crate::{Fold, MockTree, Tree};
     use assert_matches::assert_matches;
     use proptest::collection::size_range;
     use test_strategy::{proptest, Arbitrary};
@@ -126,35 +126,35 @@ mod tests {
 
     #[proptest]
     fn the_number_of_edits_is_at_most_equal_to_the_total_number_of_nodes(
-        a: MockNode<u8>,
-        b: MockNode<u8>,
+        a: MockTree<u8>,
+        b: MockTree<u8>,
     ) {
         let (e, _) = diff(&a, &b);
         assert_matches!((e.count(), a.count() + b.count()), (x, y) if x <= y);
     }
 
     #[proptest]
-    fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockNode<u8>, b: MockNode<u8>) {
+    fn the_cost_is_at_most_equal_to_the_sum_of_costs(a: MockTree<u8>, b: MockTree<u8>) {
         let (_, c) = diff(&a, &b);
         assert_matches!((c, a.cost() + b.cost()), (x, y) if x <= y);
     }
 
     #[proptest]
-    fn the_cost_between_identical_trees_is_zero(a: MockNode<u8>) {
+    fn the_cost_between_identical_trees_is_zero(a: MockTree<u8>) {
         let (e, c) = diff(&a, &a);
         assert_eq!(e.count(), a.count());
         assert_eq!(c, 0);
     }
 
     #[proptest]
-    fn nodes_of_different_kinds_cannot_be_replaced(a: MockNode<NotEq>, b: MockNode<NotEq>) {
+    fn nodes_of_different_kinds_cannot_be_replaced(a: MockTree<NotEq>, b: MockTree<NotEq>) {
         use Edit::*;
         let (e, _) = diff(&a, &b);
         assert_matches!(&e[..], [Remove, Insert] | [Insert, Remove]);
     }
 
     #[proptest]
-    fn nodes_of_equal_kinds_can_be_replaced(a: MockNode<Eq>, b: MockNode<Eq>) {
+    fn nodes_of_equal_kinds_can_be_replaced(a: MockTree<Eq>, b: MockTree<Eq>) {
         let (e, _) = diff(&a, &b);
         let (i, _) = levenshtein(a.children(), b.children());
 
@@ -165,8 +165,8 @@ mod tests {
 
     #[proptest]
     fn the_cost_of_swapping_nodes_is_equal_to_the_sum_of_their_costs(
-        a: MockNode<NotEq>,
-        b: MockNode<NotEq>,
+        a: MockTree<NotEq>,
+        b: MockTree<NotEq>,
     ) {
         let (_, c) = diff(&a, &b);
         assert_eq!(c, a.cost() + b.cost());
@@ -174,8 +174,8 @@ mod tests {
 
     #[proptest]
     fn the_cost_of_replacing_nodes_does_not_depend_on_their_weights(
-        a: MockNode<Eq>,
-        b: MockNode<Eq>,
+        a: MockTree<Eq>,
+        b: MockTree<Eq>,
     ) {
         let (_, c) = diff(&a, &b);
         let (_, d) = levenshtein(a.children(), b.children());
@@ -184,8 +184,8 @@ mod tests {
 
     #[proptest]
     fn the_cost_is_always_minimized(
-        #[any(size_range(1..16).lift())] a: Vec<MockNode<u8>>,
-        #[any(size_range(1..16).lift())] b: Vec<MockNode<u8>>,
+        #[any(size_range(1..16).lift())] a: Vec<MockTree<u8>>,
+        #[any(size_range(1..16).lift())] b: Vec<MockTree<u8>>,
         #[strategy(0..#a.len())] i: usize,
         #[strategy(0..#b.len())] j: usize,
     ) {
