@@ -38,8 +38,7 @@
 //! }
 //!
 //! impl<'t> Tree<'t> for Json {
-//!     type Child = &'t Self;
-//!     type Children = Box<dyn Iterator<Item = Self::Child> + 't>;
+//!     type Children = Box<dyn Iterator<Item = &'t Self> + 't>;
 //!     fn children(&'t self) -> Self::Children {
 //!         match self {
 //!             Json::Array(a) => Box::new(a.iter()),
@@ -120,6 +119,8 @@ pub use tree::*;
 
 mod cost;
 mod fold;
+mod memoize;
 
 pub(crate) use cost::*;
 pub(crate) use fold::*;
+pub(crate) use memoize::*;
