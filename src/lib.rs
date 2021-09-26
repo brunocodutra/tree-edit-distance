@@ -119,6 +119,8 @@ pub use edit::*;
 pub use node::*;
 pub use tree::*;
 
+mod cost;
 mod fold;
 
+pub(crate) use cost::*;
 pub(crate) use fold::*;

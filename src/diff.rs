@@ -1,4 +1,4 @@
-use crate::{Edit, Node, NodeExt};
+use crate::{Cost, Edit, Node};
 use arrayvec::ArrayVec;
 use derive_more::{Add, From};
 use itertools::Itertools;
@@ -7,9 +7,9 @@ use std::ops::{Add, Deref};
 use std::{borrow::Borrow, collections::HashMap};
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, From, Add)]
-struct Cost<T>(T);
+struct WholeNumber<T>(T);
 
-impl<T: Default + Eq + Add<Output = T>> Zero for Cost<T> {
+impl<T: Default + Eq + Add<Output = T>> Zero for WholeNumber<T> {
     fn zero() -> Self {
         Self::default()
     }
@@ -28,7 +28,7 @@ where
 {
     let mut edges = HashMap::new();
 
-    let (path, Cost(cost)) = astar(
+    let (path, WholeNumber(cost)) = astar(
         &(0, 0),
         |&(i, j)| {
             let x = a.get(i).map(B::borrow);
@@ -65,19 +65,19 @@ where
         |&(i, j)| match (&a[i..], &b[j..]) {
             (&[], rest) | (rest, &[]) => rest
                 .iter()
-                .map(B::borrow)
-                .map(N::cost)
-                .fold(Cost::default(), |r, c| r + c.into()),
+                .fold(WholeNumber::default(), |r, t| r + t.borrow().cost().into()),
 
             (a, b) if a.len() != b.len() => {
                 let rest = if a.len() > b.len() { a } else { b };
                 let nth = a.len().max(b.len()) - a.len().min(b.len());
                 let mut costs: Box<[_]> = rest.iter().map(B::borrow).map(N::cost).collect();
                 let (cheapest, _, _) = costs.select_nth_unstable(nth);
-                cheapest.iter().fold(Cost::default(), |r, &c| r + c.into())
+                cheapest
+                    .iter()
+                    .fold(WholeNumber::default(), |r, &c| r + c.into())
             }
 
-            _ => Cost::default(),
+            _ => WholeNumber::default(),
         },
         |&p| p == (a.len(), b.len()),
     )

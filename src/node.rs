@@ -1,4 +1,4 @@
-use crate::{Fold, Tree};
+use crate::{Cost, Fold, Tree};
 use std::ops::Add;
 
 /// An abstraction for a generic tree node.
@@ -22,21 +22,13 @@ pub trait Node<'n>: Tree<'n> {
     fn weight(&'n self) -> Self::Weight;
 }
 
-pub(crate) trait NodeExt: for<'n> Node<'n, Weight = Self::Cost> {
-    type Cost: Default + Add<Output = Self::Cost>;
+impl<T: ?Sized + for<'t> Node<'t, Weight = W>, W: Default + Add<Output = W>> Cost for T {
+    type Output = W;
 
     #[inline]
-    fn cost(&self) -> Self::Cost {
-        self.sum(|n| n.weight())
+    fn cost(&self) -> Self::Output {
+        self.sum(|c| c.weight())
     }
-}
-
-impl<N: ?Sized, W> NodeExt for N
-where
-    N: for<'n> Node<'n, Weight = W>,
-    W: Default + Add<Output = W>,
-{
-    type Cost = W;
 }
 
 #[cfg(test)]
