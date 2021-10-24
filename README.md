@@ -10,7 +10,7 @@ TreeEditDistance is available on [crates.io], simply add it as a dependency in y
 
 ```
 [dependencies]
-tree-edit-distance = "0.2"
+tree-edit-distance = "0.3"
 ```
 
 The full API documentation is available on [docs.rs][docs.home]

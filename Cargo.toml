@@ -1,6 +1,6 @@
 [package]
 name = "tree-edit-distance"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Bruno Dutra <brunocodutra@gmail.com>"]
 edition = "2018"
 description = "Find the lowest cost sequence of edits between two trees"
