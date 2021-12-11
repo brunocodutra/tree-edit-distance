@@ -14,7 +14,7 @@ categories = ["algorithms"]
 arrayvec = "0.7"
 derive_more = "0.99"
 itertools = "0.10"
-pathfinding = "2.0"
+pathfinding = "3.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
