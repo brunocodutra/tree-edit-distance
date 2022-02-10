@@ -11,17 +11,17 @@ keywords = ["diff", "tree", "distance", "levenshtein", "lcs"]
 categories = ["algorithms"]
 
 [dependencies]
-arrayvec = "0.7"
-derive_more = "0.99"
-itertools = "0.10"
-pathfinding = "3.0"
+arrayvec = "0.7.2"
+derive_more = "0.99.17"
+itertools = "0.10.3"
+pathfinding = "3.0.9"
 
 [dev-dependencies]
-assert_matches = "1.5"
-criterion = "0.3"
-json = "0.12"
-proptest = "1.0"
-test-strategy = "0.1"
+assert_matches = "1.5.0"
+criterion = "0.3.5"
+json = "0.12.4"
+proptest = "1.0.0"
+test-strategy = "0.1.2"
 
 [lib]
 bench = false
