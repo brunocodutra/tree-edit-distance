@@ -46,7 +46,15 @@ mod tests {
 
     impl Default for Size {
         fn default() -> Self {
-            (5, 5).into()
+            #[cfg(not(miri))]
+            {
+                (5, 5).into()
+            }
+
+            #[cfg(miri)]
+            {
+                (2, 2).into()
+            }
         }
     }
 

@@ -29,7 +29,7 @@ mod tests {
 
     #[proptest]
     fn cost_of_slice_equals_sum_of_costs(
-        #[strategy(vec(..256u32, SizeRange::default()))] s: Vec<u32>,
+        #[strategy(vec(..32u32, SizeRange::default()))] s: Vec<u32>,
     ) {
         assert_eq!(s.cost(), s.iter().sum::<u32>());
     }
