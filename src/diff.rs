@@ -177,8 +177,8 @@ mod tests {
 
     #[proptest]
     fn the_cost_is_always_minimized(
-        #[any(size_range(1..16).lift())] a: Vec<MockTree<u8>>,
-        #[any(size_range(1..16).lift())] b: Vec<MockTree<u8>>,
+        #[any(size_range(1..8).lift())] a: Vec<MockTree<u8>>,
+        #[any(size_range(1..8).lift())] b: Vec<MockTree<u8>>,
         #[strategy(0..#a.len())] i: usize,
         #[strategy(0..#b.len())] j: usize,
     ) {
