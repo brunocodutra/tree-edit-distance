@@ -12,7 +12,6 @@
 //!
 //! ```rust
 //! use tree_edit_distance::*;
-//! # use json::{object, JsonValue};
 //! use std::mem::{discriminant, Discriminant};
 //! use std::iter::empty;
 //!
@@ -48,19 +47,18 @@
 //!     }
 //! }
 //! #
-//! # impl From<JsonValue> for Json {
-//! #     fn from(obj: JsonValue) -> Self {
-//! #         use JsonValue::*;
+//! # impl From<serde_json::Value> for Json {
+//! #     fn from(obj: serde_json::Value) -> Self {
+//! #         use serde_json::Value::*;
 //! #         match obj {
 //! #             Null => Json::Null,
-//! #             Boolean(b) => Json::Bool(b),
-//! #             Number(n) => Json::Number(n.into()),
-//! #             Short(s) => Json::String(s.into()),
+//! #             Bool(b) => Json::Bool(b),
+//! #             Number(n) => Json::Number(n.as_i64().unwrap() as f64),
 //! #             String(s) => Json::String(s),
 //! #             Array(a) => Json::Array(a.into_iter().map(Into::into).collect()),
 //! #             Object(m) => Json::Map(
-//! #                 m.iter()
-//! #                     .map(|(k, v)| (k.into(), v.clone().into()))
+//! #                 m.into_iter()
+//! #                     .map(|(k, v)| (k, v.into()))
 //! #                     .collect(),
 //! #             ),
 //! #         }
@@ -70,7 +68,7 @@
 //! macro_rules! json {
 //!     ($( $tokens:tt )*) => {
 //!         // ...
-//! #         Json::from(object!($($tokens)*))
+//! #         Json::from(::serde_json::json!({$($tokens)*}))
 //!     };
 //! }
 //!
@@ -98,8 +96,8 @@
 //!
 //! assert_eq!(&*edits, &[
 //!     Edit::Replace(Box::new([
-//!         Edit::Insert,                       // "name"
-//!         Edit::Replace(Box::default()),      // "maiden name"
+//!         Edit::Replace(Box::default()),      // "name"
+//!         Edit::Insert,                       // "maiden name"
 //!         Edit::Replace(Box::default()),      // "age"
 //!         Edit::Replace(Box::new([            // "phones"
 //!             Edit::Remove,
