@@ -1,40 +1,41 @@
 use crate::{Cost, Node, Tree};
-use std::ops::Add;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct Memoized<'t, T: Tree<'t>> {
+pub(crate) struct Memoized<'t, T: 't + Tree> {
     tree: &'t T,
     cost: T::Weight,
     children: Box<[Self]>,
 }
 
-impl<'t, T: 't + Tree<'t>> Node<'t> for Memoized<'t, T> {
+impl<'t, T: 't + Tree> Node for Memoized<'t, T> {
     type Kind = T::Kind;
 
     #[inline]
-    fn kind(&'t self) -> Self::Kind {
+    fn kind(&self) -> Self::Kind {
         T::kind(self.tree)
     }
 
     type Weight = T::Weight;
 
     #[inline]
-    fn weight(&'t self) -> Self::Weight {
+    fn weight(&self) -> Self::Weight {
         T::weight(self.tree)
     }
 }
 
-impl<'t, T: 't + Tree<'t>> Tree<'t> for Memoized<'t, T> {
-    type Children = &'t [Self];
+impl<'t, T: 't + Tree> Tree for Memoized<'t, T> {
+    type Children<'c> = &'c [Self]
+    where
+        Self: 'c;
 
     #[inline]
-    fn children(&'t self) -> Self::Children {
+    fn children(&self) -> Self::Children<'_> {
         &self.children
     }
 }
 
-impl<'t, T: Tree<'t, Weight = W>, W: Copy + Default + Add<Output = W>> Cost for Memoized<'t, T> {
-    type Output = W;
+impl<'t, T: 't + Tree> Cost for Memoized<'t, T> {
+    type Output = T::Weight;
 
     #[inline]
     fn cost(&self) -> Self::Output {
@@ -42,11 +43,7 @@ impl<'t, T: Tree<'t, Weight = W>, W: Copy + Default + Add<Output = W>> Cost for 
     }
 }
 
-pub(crate) fn memoize<T, W>(t: &T) -> Memoized<T>
-where
-    T: for<'t> Tree<'t, Weight = W>,
-    W: Copy + Default + Add<Output = W>,
-{
+pub(crate) fn memoize<T: Tree>(t: &T) -> Memoized<T> {
     let children: Box<[_]> = t.children().into_iter().map(memoize).collect();
 
     Memoized {
@@ -63,17 +60,17 @@ mod tests {
     use test_strategy::proptest;
 
     #[proptest]
-    fn kind_is_preserved(t: MockTree<()>) {
+    fn kind_is_preserved(t: MockTree<u8>) {
         assert_eq!(memoize(&t).kind(), t.kind());
     }
 
     #[proptest]
-    fn weight_is_preserved(t: MockTree<()>) {
+    fn weight_is_preserved(t: MockTree<u8>) {
         assert_eq!(memoize(&t).weight(), t.weight());
     }
 
     #[proptest]
-    fn cost_is_memoized(t: MockTree<()>) {
+    fn cost_is_memoized(t: MockTree<u8>) {
         let u = memoize(&t);
         assert_eq!(u.cost, t.cost());
         assert_eq!(u.cost, u.cost());
