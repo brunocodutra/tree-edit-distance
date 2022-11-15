@@ -24,7 +24,7 @@
 //!     Map(Vec<(String, Json)>),
 //! }
 //!
-//! impl<'n> Node<'n> for Json {
+//! impl Node for Json {
 //!     type Kind = Discriminant<Json>;
 //!     fn kind(&self) -> Self::Kind {
 //!         discriminant(self)
@@ -36,9 +36,12 @@
 //!     }
 //! }
 //!
-//! impl<'t> Tree<'t> for Json {
-//!     type Children = Box<dyn Iterator<Item = &'t Self> + 't>;
-//!     fn children(&'t self) -> Self::Children {
+//! impl Tree for Json {
+//!     type Children<'c> = Box<dyn Iterator<Item = &'c Self> + 'c>
+//!     where
+//!         Self: 'c;
+//!
+//!     fn children(&self) -> Self::Children<'_> {
 //!         match self {
 //!             Json::Array(a) => Box::new(a.iter()),
 //!             Json::Map(m) => Box::new(m.iter().map(|(_, v)| v)),

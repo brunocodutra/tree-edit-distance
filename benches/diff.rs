@@ -10,19 +10,19 @@ struct TreeNode {
     children: Vec<Self>,
 }
 
-impl<'n> Node<'n> for TreeNode {
+impl Node for TreeNode {
     type Kind = ();
-    fn kind(&'n self) -> Self::Kind {}
+    fn kind(&self) -> Self::Kind {}
 
     type Weight = u32;
-    fn weight(&'n self) -> Self::Weight {
+    fn weight(&self) -> Self::Weight {
         self.weight.into()
     }
 }
 
-impl<'t> Tree<'t> for TreeNode {
-    type Children = &'t [Self];
-    fn children(&'t self) -> Self::Children {
+impl Tree for TreeNode {
+    type Children<'c> = &'c [Self];
+    fn children(&self) -> Self::Children<'_> {
         &self.children
     }
 }

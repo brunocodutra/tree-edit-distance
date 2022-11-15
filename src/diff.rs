@@ -18,10 +18,9 @@ impl<T: Default + Eq + Add<Output = T>> Zero for WholeNumber<T> {
     }
 }
 
-fn levenshtein<'t, T, W>(a: &'t [T], b: &'t [T]) -> (Box<[Edit]>, W)
+fn levenshtein<'c, T>(a: &'c [T], b: &'c [T]) -> (Box<[Edit]>, T::Weight)
 where
-    T: Tree<'t, Weight = W, Children = &'t [T]> + Cost<Output = W>,
-    W: Default + Copy + Ord + Add<Output = W>,
+    T: Tree<Children<'c> = &'c [T]> + Cost<Output = T::Weight>,
 {
     let mut edges = HashMap::new();
 
@@ -89,11 +88,7 @@ where
 ///
 /// The sequence of [Edit]s is understood to apply to the left-hand side so it becomes the
 /// right-hand side.
-pub fn diff<T, W>(a: &T, b: &T) -> (Box<[Edit]>, W)
-where
-    T: for<'t> Tree<'t, Weight = W>,
-    W: Default + Copy + Ord + Add<Output = W>,
-{
+pub fn diff<T: Tree>(a: &T, b: &T) -> (Box<[Edit]>, T::Weight) {
     levenshtein(&[memoize(a)], &[memoize(b)])
 }
 
@@ -105,10 +100,10 @@ mod tests {
     use proptest::collection::size_range;
     use test_strategy::{proptest, Arbitrary};
 
-    #[derive(Debug, Default, Clone, Eq, PartialEq, Arbitrary)]
+    #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Arbitrary)]
     struct Eq;
 
-    #[derive(Debug, Default, Clone, Arbitrary)]
+    #[derive(Debug, Default, Copy, Clone, Arbitrary)]
     struct NotEq;
 
     impl PartialEq for NotEq {

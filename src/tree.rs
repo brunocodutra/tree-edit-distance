@@ -1,14 +1,14 @@
 use std::ops::Add;
 
 /// An abstraction for a generic tree node.
-pub trait Node<'n> {
+pub trait Node {
     /// The type of this [Node]'s [kind][Node::kind].
     ///
     /// Only [Node]s of the equal _kind_ can replace each other.
     type Kind: PartialEq;
 
     /// Returns this [Node]'s _kind_.
-    fn kind(&'n self) -> Self::Kind;
+    fn kind(&self) -> Self::Kind;
 
     /// The type of this [Node]'s [weight][Node::weight].
     ///
@@ -18,16 +18,18 @@ pub trait Node<'n> {
     /// Returns the cost of inserting or deleting this [Node].
     ///
     /// A [Node]'s weight should be independent of the weight of its children.
-    fn weight(&'n self) -> Self::Weight;
+    fn weight(&self) -> Self::Weight;
 }
 
 /// An abstraction for a recursive tree.
-pub trait Tree<'t>: 't + Node<'t> {
+pub trait Tree: Node {
     /// A type that can iterate over this [Tree]'s [children][Tree::children].
-    type Children: IntoIterator<Item = &'t Self>;
+    type Children<'c>: 'c + IntoIterator<Item = &'c Self>
+    where
+        Self: 'c;
 
     /// Returns this [Tree]'s immediate children.
-    fn children(&'t self) -> Self::Children;
+    fn children(&self) -> Self::Children<'_>;
 }
 
 #[cfg(test)]
@@ -58,7 +60,10 @@ mod tests {
         }
     }
 
-    fn tree<K: 'static + PartialEq + Arbitrary>(size: Size) -> impl Strategy<Value = MockTree<K>> {
+    fn tree<K>(size: Size) -> impl Strategy<Value = MockTree<K>>
+    where
+        K: 'static + Copy + PartialEq + Arbitrary,
+    {
         let depth = size.depth as u32;
         let breadth = size.breadth as u32;
         let size = (breadth.pow(depth + 1) - 1) / (breadth - 1) / 2; // half the maximum number of nodes
@@ -71,13 +76,13 @@ mod tests {
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, From)]
-    pub(crate) struct MockTree<K: PartialEq> {
+    pub(crate) struct MockTree<K: Copy + PartialEq> {
         kind: K,
         weight: u8,
         children: Vec<Self>,
     }
 
-    impl<K: 'static + PartialEq + Arbitrary> Arbitrary for MockTree<K> {
+    impl<K: 'static + Copy + PartialEq + Arbitrary> Arbitrary for MockTree<K> {
         type Parameters = Size;
         type Strategy = BoxedStrategy<Self>;
 
@@ -86,39 +91,36 @@ mod tests {
         }
     }
 
-    impl<'n, K: 'n + PartialEq> Node<'n> for MockTree<K> {
-        type Kind = &'n K;
-        fn kind(&'n self) -> Self::Kind {
-            &self.kind
+    impl<K: Copy + PartialEq> Node for MockTree<K> {
+        type Kind = K;
+        fn kind(&self) -> Self::Kind {
+            self.kind
         }
 
         type Weight = u64;
-        fn weight(&'n self) -> Self::Weight {
+        fn weight(&self) -> Self::Weight {
             self.weight.into()
         }
     }
 
-    impl<'t, K: 't + PartialEq> Tree<'t> for MockTree<K> {
-        type Children = &'t [Self];
-        fn children(&'t self) -> Self::Children {
+    impl<K: Copy + PartialEq> Tree for MockTree<K> {
+        type Children<'c> = &'c [Self]
+        where
+            Self: 'c;
+
+        fn children(&self) -> Self::Children<'_> {
             &self.children
         }
     }
 
-    impl<K: PartialEq> Fold for MockTree<K>
-    where
-        Self: for<'t> Tree<'t, Children = &'t [Self]>,
-    {
+    impl<K: Copy + PartialEq> Fold for MockTree<K> {
         fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
             self.children().fold(f(init, self), f)
         }
     }
 
-    impl<K: PartialEq, W: Default + Copy + Add<Output = W>> Cost for MockTree<K>
-    where
-        Self: for<'t> Tree<'t, Weight = W, Children = &'t [Self]>,
-    {
-        type Output = W;
+    impl<K: Copy + PartialEq> Cost for MockTree<K> {
+        type Output = <Self as Node>::Weight;
 
         #[inline]
         fn cost(&self) -> Self::Output {
