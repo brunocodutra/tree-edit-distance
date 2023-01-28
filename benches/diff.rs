@@ -40,7 +40,7 @@ fn bench(c: &mut Criterion) {
     let mut runner = TestRunner::default();
     let mut group = c.benchmark_group("n-ary tree diff");
     for (d, b) in [(7, 2), (3, 6), (2, 15), (1, 255)] {
-        group.bench_with_input(format!("depth={}/breadth={}", d, b), &tree(d, b), |b, s| {
+        group.bench_with_input(format!("depth={d}/breadth={b}"), &tree(d, b), |b, s| {
             b.iter_batched_ref(
                 || (s, s).new_tree(&mut runner).unwrap().current(),
                 |(a, b)| diff(a, b),
