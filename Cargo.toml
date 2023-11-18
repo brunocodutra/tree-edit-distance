@@ -13,7 +13,7 @@ categories = ["algorithms"]
 [dependencies]
 arrayvec = { version = "0.7.2", default-features = false, features = ["std"] }
 derive_more = { version = "0.99.17", default-features = false, features = ["add", "from"] }
-itertools = { version = "0.11.0", default-features = false, features = ["use_std"] }
+itertools = { version = "0.12.0", default-features = false, features = ["use_std"] }
 pathfinding = { version = "4.0.0", default-features = false }
 
 [dev-dependencies]
