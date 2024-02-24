@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 //! # Overview
 //!
 //! This crate provides an implementation of a recursive generalized version of the
