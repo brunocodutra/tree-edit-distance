@@ -3,3 +3,4 @@
 Cargo.lock
 cobertura.xml
 .vscode
+lcov.info
