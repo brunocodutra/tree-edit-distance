@@ -121,9 +121,13 @@ pub use edit::*;
 pub use tree::*;
 
 mod cost;
-mod fold;
 mod memoize;
 
 pub(crate) use cost::*;
-pub(crate) use fold::*;
 pub(crate) use memoize::*;
+
+#[cfg(test)]
+mod fold;
+
+#[cfg(test)]
+pub(crate) use fold::*;

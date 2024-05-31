@@ -1,5 +1,3 @@
-use crate::Fold;
-
 /// A single operation between two [Node][crate::Node]s.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Edit {
@@ -13,7 +11,8 @@ pub enum Edit {
     Remove,
 }
 
-impl Fold for Edit {
+#[cfg(test)]
+impl crate::Fold for Edit {
     #[inline]
     fn fold<R, Fn: FnMut(R, &Self) -> R>(&self, init: R, f: &mut Fn) -> R {
         if let Edit::Replace(c) = self {
